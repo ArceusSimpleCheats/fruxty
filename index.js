@@ -1,3 +1,6 @@
+// Put this at the VERY FIRST LINE of index.js
+console.log('🚀 BOT STARTING - NEW VERSION WITH RANK COMMANDS - ' + new Date().toISOString());
+
 const { Client, GatewayIntentBits, REST, Routes, ActivityType, EmbedBuilder, ChannelType, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const express = require('express');
 const cors = require('cors');
