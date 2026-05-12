@@ -935,6 +935,46 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Add this to your existing index.js (before app.listen)
+
+// ============ DISCORD OAUTH BACKEND ============
+const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET; // Add to .env!
+
+// Exchange code for token
+app.post('/api/auth/token', async (req, res) => {
+    const { code } = req.body;
+    
+    const params = new URLSearchParams();
+    params.append('client_id', process.env.CLIENT_ID);
+    params.append('client_secret', CLIENT_SECRET);
+    params.append('grant_type', 'authorization_code');
+    params.append('code', code);
+    params.append('redirect_uri', 'https://fruxty-dashboard.vercel.app/dashboard');
+    
+    const response = await fetch('https://discord.com/api/oauth2/token', {
+        method: 'POST',
+        body: params,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+    
+    const data = await response.json();
+    res.json(data);
+});
+
+// Verify token and get user
+app.get('/api/auth/verify', async (req, res) => {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'No token' });
+    
+    const response = await fetch('https://discord.com/api/users/@me', {
+        headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    if (!response.ok) return res.status(401).json({ error: 'Invalid token' });
+    const user = await response.json();
+    res.json(user);
+});
+
 app.get('/', (req, res) => {
     res.send('Fruxty Bot is running! 🚀');
 });
