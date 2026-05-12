@@ -5,6 +5,16 @@ const dotenv = require('dotenv');
 const cron = require('node-cron');
 
 dotenv.config();
+// Check if token exists
+if (!process.env.DISCORD_TOKEN) {
+    console.error('❌ DISCORD_TOKEN is missing!');
+    process.exit(1);
+}
+if (!process.env.CLIENT_ID) {
+    console.error('❌ CLIENT_ID is missing!');
+    process.exit(1);
+}
+console.log('✅ Token found, length:', process.env.DISCORD_TOKEN.length);
 
 const client = new Client({
     intents: [
