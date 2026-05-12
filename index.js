@@ -497,17 +497,43 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get('/api/status', (req, res) => {
-    res.json({ status: 'online', guilds: client.guilds.cache.size, users: client.users.cache.size, uptime: client.uptime, commands: commands.length });
+// Homepage
+app.get('/', (req, res) => {
+    res.json({
+        bot: 'Fruxty',
+        status: '🟢 Online',
+        discord: 'https://discord.com/oauth2/authorize?client_id=' + process.env.CLIENT_ID,
+        uptime: `${Math.floor(client.uptime / 1000 / 60)} minutes`,
+        servers: client.guilds.cache.size,
+        users: client.users.cache.size
+    });
 });
 
+// API Status
+app.get('/api/status', (req, res) => {
+    res.json({
+        name: 'Fruxty Bot',
+        status: 'online',
+        guilds: client.guilds.cache.size,
+        users: client.users.cache.size,
+        ping: client.ws.ping,
+        uptime: client.uptime
+    });
+});
+
+// API Guilds
 app.get('/api/guilds', (req, res) => {
-    const guilds = client.guilds.cache.map(g => ({ id: g.id, name: g.name, icon: g.iconURL(), memberCount: g.memberCount }));
+    const guilds = client.guilds.cache.map(g => ({
+        id: g.id,
+        name: g.name,
+        members: g.memberCount,
+        icon: g.iconURL()
+    }));
     res.json(guilds);
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`📡 Dashboard API on port ${PORT}`));
+app.listen(PORT, () => console.log(`📡 Fruxty API on port ${PORT}`));
 
 // ============ LOGIN ============
 client.login(process.env.DISCORD_TOKEN);
