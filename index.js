@@ -428,20 +428,64 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
     
-    // ============ AUTOMOD ============
-    if (commandName === 'automod') {
-        if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
+// ============ AUTO-MODERATION ============
+client.on('messageCreate', async (message) => {
+    if (message.author.bot || !message.guild) return;
+    
+    // IGNORE STAFF - Admins, Mods, and anyone with moderation permissions
+    if (message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
+    if (message.member.permissions.has(PermissionFlagsBits.ManageMessages)) return;
+    if (message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) return;
+    if (message.member.permissions.has(PermissionFlagsBits.KickMembers)) return;
+    if (message.member.permissions.has(PermissionFlagsBits.BanMembers)) return;
+    
+    const config = guildConfig.get(message.guild.id) || defaultConfig;
+    if (!config.automod?.enabled) return;
+    
+    // Bad words filter
+    const content = message.content.toLowerCase();
+    const foundBadWord = badWords.find(word => content.includes(word));
+    
+    if (foundBadWord) {
+        await message.delete();
+        
+        const userWarnings = warnings.get(`${message.guild.id}-${message.author.id}`) || [];
+        userWarnings.push({ reason: `Bad word: ${foundBadWord}`, date: Date.now(), mod: 'AutoMod' });
+        warnings.set(`${message.guild.id}-${message.author.id}`, userWarnings);
+        
+        const embed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🛡️ AutoMod')
+            .setDescription(`${message.author}, your message was deleted for inappropriate language.`)
+            .addFields({ name: 'Warning', value: `${userWarnings.length}/3` });
+        
+        const warningMsg = await message.channel.send({ embeds: [embed] });
+        setTimeout(() => warningMsg.delete(), 5000);
+        
+        if (userWarnings.length >= 3) {
+            await message.member.timeout(30 * 60 * 1000, '3 warnings');
+            warnings.delete(`${message.guild.id}-${message.author.id}`);
         }
-        
-        const action = options.getString('action');
-        const config = guildConfig.get(guild.id) || defaultConfig;
-        config.automod = { ...config.automod, enabled: action === 'on' };
-        guildConfig.set(guild.id, config);
-        
-        await interaction.reply({ content: `✅ AutoMod turned ${action.toUpperCase()}!`, ephemeral: true });
-        return;
     }
+    
+    // Anti-spam - Also ignore staff
+    const now = Date.now();
+    const userHistory = messageHistory.get(`${message.guild.id}-${message.author.id}`) || [];
+    const recent = userHistory.filter(t => now - t < 5000);
+    recent.push(now);
+    messageHistory.set(`${message.guild.id}-${message.author.id}`, recent);
+    
+    if (recent.length > 5) {
+        await message.delete();
+        await message.member.timeout(60 * 1000, 'Spamming');
+        messageHistory.delete(`${message.guild.id}-${message.author.id}`);
+    }
+    
+    setTimeout(() => {
+        const current = messageHistory.get(`${message.guild.id}-${message.author.id}`) || [];
+        messageHistory.set(`${message.guild.id}-${message.author.id}`, current.filter(t => now - t < 5000));
+    }, 5000);
+});
     
     // ============ BAN ============
     if (commandName === 'ban') {
