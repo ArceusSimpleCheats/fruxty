@@ -3,4 +3,14 @@ services:
     name: fruxty-bot
     env: node
     buildCommand: npm install
-    startCommand: npm start
+    startCommand: node index.js
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: CLIENT_ID
+        sync: false
+      - key: OWNER_ID
+        sync: false
+      - key: PORT
+        value: 3000
+    healthCheckPath: /health
