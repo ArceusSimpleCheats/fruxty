@@ -1,6 +1,3 @@
-// Put this at the VERY FIRST LINE of index.js
-console.log('🚀 BOT STARTING - NEW VERSION WITH RANK COMMANDS - ' + new Date().toISOString());
-
 const { Client, GatewayIntentBits, REST, Routes, ActivityType, EmbedBuilder, ChannelType, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const express = require('express');
 const cors = require('cors');
@@ -19,15 +16,16 @@ const client = new Client({
     ]
 });
 
+console.log('🚀 Fruxty Bot Starting...');
+
 // ============ DATA STORAGE ============
 const guildConfig = new Map();
 const tempChannels = new Map();
 const warnings = new Map();
 const messageHistory = new Map();
-const debugLogs = [];
-const verifyCodes = new Map();
 const levels = new Map();
 const giveaways = new Map();
+const verifyCodes = new Map();
 
 // ============ DEFAULT CONFIG ============
 const defaultConfig = {
@@ -44,49 +42,68 @@ const defaultConfig = {
 };
 
 // ============ BAD WORDS ============
-const badWords = ['fuck', 'shit', 'asshole', 'bitch', 'cunt', 'dick', 'pussy', 'whore', 'bastard', 'nigga', 'faggot', 'retard', 'porn', 'xxx', 'nsfw', 'nude', 'sex', 'penis', 'vagina'];
+const badWords = ['fuck', 'shit', 'asshole', 'bitch', 'cunt', 'dick', 'pussy', 'whore', 'bastard', 'nigga', 'faggot', 'retard', 'porn', 'xxx', 'nsfw', 'nude', 'sex'];
 
-// ============ LOG DEBUG ============
-function addDebugLog(action, data) {
-    const log = {
-        id: debugLogs.length + 1,
-        timestamp: Date.now(),
-        timestampFormatted: new Date().toISOString(),
-        action,
-        data
-    };
-    debugLogs.unshift(log);
-    if (debugLogs.length > 100) debugLogs.pop();
-    console.log(`[DEBUG] ${action}:`, data);
-    return log;
-}
-
-// ============ SLASH COMMANDS ============
+// ============ ALL SLASH COMMANDS (FULL LIST) ============
 const commands = [
+    // Information Commands
     { name: 'ping', description: 'Check bot latency' },
     { name: 'serverinfo', description: 'Get server information' },
     { name: 'userinfo', description: 'Get user info', options: [{ name: 'user', type: 6, description: 'User', required: false }] },
     { name: 'avatar', description: 'Get user avatar', options: [{ name: 'user', type: 6, description: 'User', required: false }] },
     { name: 'botinfo', description: 'Get bot statistics' },
     { name: 'help', description: 'Show all commands' },
+    
+    // Leveling Commands
     { name: 'rank', description: 'Check your level and XP' },
     { name: 'leaderboard', description: 'View top 10 users by level' },
+    
+    // Giveaway Commands
     { name: 'giveaway', description: 'Start a giveaway (Admin only)', options: [
         { name: 'duration', type: 4, description: 'Duration in minutes', required: true },
         { name: 'prize', type: 3, description: 'What to win', required: true },
         { name: 'winners', type: 4, description: 'Number of winners', required: true }
     ]},
+    
+    // Setup Commands
     { name: 'setup', description: 'Setup Fruxty bot (Admin only)' },
     { name: 'setup-voice', description: 'Setup temp voice channels (Admin only)' },
-    { name: 'setup-verify', description: 'Setup verification system (Admin only)', options: [{ name: 'channel', type: 7, required: true }, { name: 'role', type: 8, required: true }] },
-    { name: 'automod', description: 'Toggle auto-moderation (Admin only)', options: [{ name: 'action', type: 3, required: true, choices: [{ name: 'on', value: 'on' }, { name: 'off', value: 'off' }] }] },
-    { name: 'purge', description: 'Delete messages (Admin only)', options: [{ name: 'amount', type: 4, required: true, min_value: 1, max_value: 100 }] },
-    { name: 'lockdown', description: 'Lock a channel (Admin only)', options: [{ name: 'channel', type: 7, required: false }] },
-    { name: 'ban', description: 'Ban a user', options: [{ name: 'user', type: 6, required: true }, { name: 'reason', type: 3, required: false }] },
-    { name: 'kick', description: 'Kick a user', options: [{ name: 'user', type: 6, required: true }, { name: 'reason', type: 3, required: false }] },
-    { name: 'timeout', description: 'Timeout a user', options: [{ name: 'user', type: 6, required: true }, { name: 'minutes', type: 4, required: true, min_value: 1, max_value: 1440 }] },
-    { name: 'warn', description: 'Warn a user', options: [{ name: 'user', type: 6, required: true }, { name: 'reason', type: 3, required: true }] },
-    { name: 'warnings', description: 'View user warnings', options: [{ name: 'user', type: 6, required: false }] },
+    { name: 'setup-verify', description: 'Setup verification system (Admin only)', options: [
+        { name: 'channel', type: 7, description: 'Verification channel', required: true },
+        { name: 'role', type: 8, description: 'Role to give', required: true }
+    ]},
+    { name: 'automod', description: 'Toggle auto-moderation (Admin only)', options: [
+        { name: 'action', type: 3, description: 'On or off', required: true, choices: [{ name: 'on', value: 'on' }, { name: 'off', value: 'off' }] }
+    ]},
+    
+    // Moderation Commands
+    { name: 'purge', description: 'Delete messages (Admin only)', options: [
+        { name: 'amount', type: 4, description: 'Number of messages (1-100)', required: true, min_value: 1, max_value: 100 }
+    ]},
+    { name: 'lockdown', description: 'Lock a channel (Admin only)', options: [
+        { name: 'channel', type: 7, description: 'Channel to lock', required: false }
+    ]},
+    { name: 'ban', description: 'Ban a user', options: [
+        { name: 'user', type: 6, description: 'User to ban', required: true },
+        { name: 'reason', type: 3, description: 'Reason for ban', required: false }
+    ]},
+    { name: 'kick', description: 'Kick a user', options: [
+        { name: 'user', type: 6, description: 'User to kick', required: true },
+        { name: 'reason', type: 3, description: 'Reason for kick', required: false }
+    ]},
+    { name: 'timeout', description: 'Timeout a user', options: [
+        { name: 'user', type: 6, description: 'User to timeout', required: true },
+        { name: 'minutes', type: 4, description: 'Duration in minutes (1-1440)', required: true, min_value: 1, max_value: 1440 }
+    ]},
+    { name: 'warn', description: 'Warn a user', options: [
+        { name: 'user', type: 6, description: 'User to warn', required: true },
+        { name: 'reason', type: 3, description: 'Reason for warning', required: true }
+    ]},
+    { name: 'warnings', description: 'View user warnings', options: [
+        { name: 'user', type: 6, description: 'User to check', required: false }
+    ]},
+    
+    // Voice Commands
     { name: 'vc', description: 'Manage your temporary voice channel', options: [
         { name: 'rename', type: 1, description: 'Rename your channel', options: [{ name: 'name', type: 3, description: 'New name', required: true }] },
         { name: 'limit', type: 1, description: 'Set user limit', options: [{ name: 'limit', type: 4, description: '1-99', required: true, min_value: 1, max_value: 99 }] },
@@ -96,174 +113,47 @@ const commands = [
         { name: 'reveal', type: 1, description: 'Show channel to member list' },
         { name: 'claim', type: 1, description: 'Claim ownership (if owner left)' }
     ]},
-    { name: 'verify', description: 'Verify yourself' },
-    { name: 'owner', description: 'Owner only commands', options: [
-        { name: 'debug', type: 1, description: 'Debug a user', options: [{ name: 'user', type: 6, description: 'User', required: true }] },
-        { name: 'guilds', type: 1, description: 'List all guilds bot is in' },
-        { name: 'leave', type: 1, description: 'Make bot leave a guild', options: [{ name: 'guildid', type: 3, description: 'Guild ID', required: true }] },
-        { name: 'exec', type: 1, description: 'Execute a command in a guild', options: [{ name: 'guildid', type: 3, required: true }, { name: 'command', type: 3, required: true }] }
-    ]}
+    
+    // Verification Command
+    { name: 'verify', description: 'Verify yourself' }
 ];
 
 // ============ READY EVENT ============
 client.once('ready', async () => {
     console.log(`✅ Fruxty is online as ${client.user.tag}`);
-    addDebugLog('BOT_START', { tag: client.user.tag, id: client.user.id, guilds: client.guilds.cache.size });
+    console.log(`📊 Bot is in ${client.guilds.cache.size} servers`);
     
+    // Register ALL commands with Discord
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
     try {
+        console.log('🔄 Registering slash commands...');
         await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-        console.log(`✅ Registered ${commands.length} commands`);
-    } catch(e) { console.error(e); }
+        console.log(`✅ Registered ${commands.length} commands successfully!`);
+        console.log(`📝 Commands: ${commands.map(c => c.name).join(', ')}`);
+    } catch(e) { 
+        console.error('❌ Failed to register commands:', e);
+    }
     
-    updateStatus();
-    startGiveawayChecker();
-});
-
-async function updateStatus() {
-    const serverCount = client.guilds.cache.size;
+    // Set bot status
     client.user.setPresence({
-        activities: [{ name: `/help | ${serverCount} servers`, type: ActivityType.Watching }],
+        activities: [{ name: `/help | ${client.guilds.cache.size} servers`, type: ActivityType.Watching }],
         status: 'online'
     });
-}
-
-setInterval(() => updateStatus(), 300000);
-
-// ============ LEVELING SYSTEM ============
-client.on('messageCreate', async (message) => {
-    if (message.author.bot || !message.guild) return;
-    
-    const config = guildConfig.get(message.guild.id) || defaultConfig;
-    if (!config.leveling?.enabled) return;
-    
-    // Random XP between 5-15
-    const xpGain = Math.floor(Math.random() * 10) + 5;
-    const userId = message.author.id;
-    const guildId = message.guild.id;
-    const key = `${guildId}-${userId}`;
-    
-    let userData = levels.get(key);
-    if (!userData) {
-        userData = { xp: 0, level: 0, totalXP: 0 };
-    }
-    
-    userData.xp += xpGain;
-    userData.totalXP += xpGain;
-    
-    const xpNeeded = (userData.level + 1) * 100;
-    
-    if (userData.xp >= xpNeeded) {
-        userData.level++;
-        userData.xp = userData.xp - xpNeeded;
-        
-        // Level up message
-        const levelUpEmbed = new EmbedBuilder()
-            .setColor(0x00FF00)
-            .setTitle(`🎉 LEVEL UP! 🎉`)
-            .setDescription(`${message.author} reached **Level ${userData.level}**!`)
-            .setFooter({ text: `Total XP: ${userData.totalXP}` });
-        
-        const levelChannel = config.leveling.channel ? message.guild.channels.cache.get(config.leveling.channel) : message.channel;
-        if (levelChannel) {
-            await levelChannel.send({ embeds: [levelUpEmbed] });
-        }
-        
-        addDebugLog('LEVEL_UP', { userId, guildId, newLevel: userData.level });
-        
-        // Give role rewards at certain levels
-        if (userData.level === 5) {
-            let role = message.guild.roles.cache.find(r => r.name === 'Level 5');
-            if (!role) {
-                role = await message.guild.roles.create({ name: 'Level 5', color: 0x00FF00 });
-            }
-            await message.member.roles.add(role);
-            await message.channel.send(`🎁 ${message.author} got the **Level 5** role!`);
-        } else if (userData.level === 10) {
-            let role = message.guild.roles.cache.find(r => r.name === 'Level 10');
-            if (!role) {
-                role = await message.guild.roles.create({ name: 'Level 10', color: 0x00AAFF });
-            }
-            await message.member.roles.add(role);
-            await message.channel.send(`🎁 ${message.author} got the **Level 10** role!`);
-        } else if (userData.level === 25) {
-            let role = message.guild.roles.cache.find(r => r.name === 'Level 25');
-            if (!role) {
-                role = await message.guild.roles.create({ name: 'Level 25', color: 0xFFAA00 });
-            }
-            await message.member.roles.add(role);
-            await message.channel.send(`🎁 ${message.author} got the **Level 25** role!`);
-        }
-    }
-    
-    levels.set(key, userData);
 });
 
-// ============ GIVEAWAY SYSTEM ============
-async function startGiveawayChecker() {
-    setInterval(async () => {
-        const now = Date.now();
-        for (const [messageId, giveaway] of giveaways) {
-            if (giveaway.endsAt <= now && !giveaway.ended) {
-                await endGiveaway(messageId, giveaway);
-            }
-        }
-    }, 10000);
-}
-
-async function endGiveaway(messageId, giveaway) {
-    try {
-        const channel = await client.channels.fetch(giveaway.channelId);
-        const message = await channel.messages.fetch(messageId);
-        
-        // Get participants
-        const participants = [];
-        const reactions = message.reactions.cache.get('🎉');
-        if (reactions) {
-            const users = await reactions.users.fetch();
-            users.forEach(user => {
-                if (!user.bot) participants.push(user);
-            });
-        }
-        
-        const winners = [];
-        if (participants.length > 0) {
-            for (let i = 0; i < Math.min(giveaway.winners, participants.length); i++) {
-                const randomIndex = Math.floor(Math.random() * participants.length);
-                winners.push(participants[randomIndex]);
-                participants.splice(randomIndex, 1);
-            }
-        }
-        
-        const winnerText = winners.length > 0 ? winners.map(w => `<@${w.id}>`).join(', ') : 'No valid participants';
-        
-        const embed = new EmbedBuilder()
-            .setColor(0xFF0000)
-            .setTitle(`🎁 GIVEAWAY ENDED 🎁`)
-            .setDescription(`**Prize:** ${giveaway.prize}\n**Winners:** ${winnerText}`)
-            .setTimestamp();
-        
-        await message.edit({ embeds: [embed], components: [] });
-        await channel.send({ content: `🎉 Congratulations ${winnerText}! You won **${giveaway.prize}**!` });
-        
-        giveaway.ended = true;
-        giveaways.set(messageId, giveaway);
-        addDebugLog('GIVEAWAY_ENDED', { messageId, winners: winners.length });
-    } catch (error) {
-        console.error('Giveaway ending error:', error);
-    }
-}
-
-// ============ HELP COMMAND ============
+// ============ COMMAND HANDLER ============
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
     
     const { commandName, options, guild, member, channel } = interaction;
     
+    console.log(`📝 Command: ${commandName} | User: ${interaction.user.tag}`);
+    
+    // ============ HELP COMMAND ============
     if (commandName === 'help') {
         const embed = new EmbedBuilder()
             .setColor(0xFF6B35)
-            .setTitle('📚 Fruxty Bot Commands')
+            .setTitle('📚 Fruxty Bot - All Commands')
             .setDescription('Here are all my commands!')
             .addFields(
                 { name: '📊 Information', value: '`/ping`, `/serverinfo`, `/userinfo`, `/avatar`, `/botinfo`', inline: false },
@@ -272,8 +162,7 @@ client.on('interactionCreate', async (interaction) => {
                 { name: '🛡️ Moderation', value: '`/ban`, `/kick`, `/timeout`, `/warn`, `/warnings`, `/purge`, `/lockdown`', inline: false },
                 { name: '⚙️ Setup', value: '`/setup`, `/setup-voice`, `/setup-verify`, `/automod`', inline: false },
                 { name: '🎤 Voice', value: '`/vc rename`, `/vc limit`, `/vc lock`, `/vc unlock`, `/vc hide`, `/vc reveal`, `/vc claim`', inline: false },
-                { name: '🔐 Verification', value: '`/verify`', inline: false },
-                { name: '👑 Owner', value: '`/owner debug`, `/owner guilds`, `/owner leave`, `/owner exec`', inline: false }
+                { name: '🔐 Verification', value: '`/verify`', inline: false }
             )
             .setFooter({ text: 'Fruxty Bot - Protecting your server!' });
         
@@ -281,189 +170,7 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
     
-    // Get config safely
-    let config = defaultConfig;
-    if (guild) {
-        config = guildConfig.get(guild.id) || { ...defaultConfig };
-    }
-    
-    addDebugLog('COMMAND_USED', { command: commandName, userId: interaction.user.id, guildId: guild?.id });
-    
-    // ============ OWNER COMMANDS ============
-    if (commandName === 'owner') {
-        if (interaction.user.id !== process.env.OWNER_ID) {
-            return interaction.reply({ content: '❌ Owner only command!', ephemeral: true });
-        }
-        
-        const subcommand = options.getSubcommand();
-        
-        if (subcommand === 'debug') {
-            const targetUser = options.getUser('user');
-            await interaction.deferReply({ ephemeral: true });
-            
-            const debugInfo = await getUserDebugInfo(targetUser.id);
-            
-            const embed = new EmbedBuilder()
-                .setColor(0xFF6B35)
-                .setTitle(`🔍 Debug: ${targetUser.tag}`)
-                .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
-                .addFields(
-                    { name: '🆔 User ID', value: targetUser.id, inline: true },
-                    { name: '📅 Account Age', value: `<t:${Math.floor(targetUser.createdTimestamp / 1000)}:R>`, inline: true },
-                    { name: '🤖 Is Bot', value: targetUser.bot ? 'Yes' : 'No', inline: true },
-                    { name: '🌍 Servers Found', value: `${debugInfo.serversFound}`, inline: true },
-                    { name: '⚠️ Total Warnings', value: `${debugInfo.totalWarnings}`, inline: true },
-                    { name: '🎤 Temp Channels', value: `${debugInfo.tempChannels}`, inline: true }
-                )
-                .setFooter({ text: `Debug by ${interaction.user.tag}` });
-            
-            await interaction.editReply({ embeds: [embed] });
-        }
-        else if (subcommand === 'guilds') {
-            await interaction.deferReply({ ephemeral: true });
-            const guildList = client.guilds.cache.map(g => `**${g.name}** - ${g.id} (${g.memberCount} members)`).join('\n');
-            await interaction.editReply({ content: `**Bot is in ${client.guilds.cache.size} guilds:**\n\n${guildList}`, ephemeral: true });
-        }
-        else if (subcommand === 'leave') {
-            const guildId = options.getString('guildid');
-            const targetGuild = client.guilds.cache.get(guildId);
-            
-            if (!targetGuild) {
-                return interaction.reply({ content: '❌ Guild not found or bot not in it!', ephemeral: true });
-            }
-            
-            await targetGuild.leave();
-            await interaction.reply({ content: `✅ Left guild: **${targetGuild.name}**`, ephemeral: true });
-            addDebugLog('OWNER_LEFT_GUILD', { guildId, guildName: targetGuild.name });
-        }
-        else if (subcommand === 'exec') {
-            const guildId = options.getString('guildid');
-            const commandText = options.getString('command');
-            const targetGuild = client.guilds.cache.get(guildId);
-            
-            if (!targetGuild) {
-                return interaction.reply({ content: '❌ Guild not found!', ephemeral: true });
-            }
-            
-            await interaction.reply({ content: `⏳ Executing \`${commandText}\` in **${targetGuild.name}**...`, ephemeral: true });
-            addDebugLog('OWNER_EXEC', { guildId, command: commandText });
-        }
-        return;
-    }
-    
-    // Make sure we have a guild for non-owner commands
-    if (!guild) {
-        return interaction.reply({ content: '❌ This command can only be used in a server!', ephemeral: true });
-    }
-    
-    // ============ RANK COMMAND ============
-    if (commandName === 'rank') {
-        await interaction.deferReply();
-        
-        const key = `${guild.id}-${interaction.user.id}`;
-        const userData = levels.get(key) || { xp: 0, level: 0, totalXP: 0 };
-        const xpNeeded = (userData.level + 1) * 100;
-        const xpProgress = Math.floor((userData.xp / xpNeeded) * 100);
-        
-        // Get rank position
-        let allUsers = [];
-        for (const [k, data] of levels) {
-            if (k.startsWith(guild.id)) {
-                allUsers.push({ userId: k.split('-')[1], level: data.level, totalXP: data.totalXP });
-            }
-        }
-        allUsers.sort((a, b) => b.totalXP - a.totalXP);
-        const rank = allUsers.findIndex(u => u.userId === interaction.user.id) + 1;
-        
-        const embed = new EmbedBuilder()
-            .setColor(0xFF6B35)
-            .setTitle(`📊 ${interaction.user.username}'s Rank`)
-            .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
-            .addFields(
-                { name: 'Level', value: `${userData.level}`, inline: true },
-                { name: 'Rank', value: `#${rank}`, inline: true },
-                { name: 'Total XP', value: `${userData.totalXP}`, inline: true },
-                { name: 'Progress', value: `${userData.xp}/${xpNeeded} XP (${xpProgress}%)`, inline: false }
-            )
-            .setFooter({ text: 'Keep chatting to level up!' });
-        
-        await interaction.editReply({ embeds: [embed] });
-        return;
-    }
-    
-    // ============ LEADERBOARD COMMAND ============
-    if (commandName === 'leaderboard') {
-        await interaction.deferReply();
-        
-        let allUsers = [];
-        for (const [k, data] of levels) {
-            if (k.startsWith(guild.id)) {
-                allUsers.push({ userId: k.split('-')[1], level: data.level, totalXP: data.totalXP });
-            }
-        }
-        allUsers.sort((a, b) => b.totalXP - a.totalXP);
-        const top10 = allUsers.slice(0, 10);
-        
-        let leaderboardText = '';
-        for (let i = 0; i < top10.length; i++) {
-            const user = await client.users.fetch(top10[i].userId).catch(() => null);
-            const username = user ? user.username : 'Unknown User';
-            leaderboardText += `${i+1}. **${username}** - Level ${top10[i].level} (${top10[i].totalXP} XP)\n`;
-        }
-        
-        const embed = new EmbedBuilder()
-            .setColor(0xFF6B35)
-            .setTitle(`🏆 Server Leaderboard`)
-            .setDescription(leaderboardText || 'No users ranked yet!')
-            .setFooter({ text: 'Chat more to climb the ranks!' });
-        
-        await interaction.editReply({ embeds: [embed] });
-        return;
-    }
-    
-    // ============ GIVEAWAY COMMAND ============
-    if (commandName === 'giveaway') {
-        if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
-        }
-        
-        const duration = options.getInteger('duration');
-        const prize = options.getString('prize');
-        const winners = options.getInteger('winners');
-        const endsAt = Date.now() + (duration * 60 * 1000);
-        
-        const embed = new EmbedBuilder()
-            .setColor(0x00FF00)
-            .setTitle(`🎁 GIVEAWAY 🎁`)
-            .setDescription(`**Prize:** ${prize}\n**Winners:** ${winners}\n**Ends:** <t:${Math.floor(endsAt / 1000)}:R>`)
-            .setFooter({ text: `React with 🎉 to enter!` });
-        
-        const row = new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setCustomId('giveaway_enter')
-                    .setLabel('Enter Giveaway')
-                    .setStyle(ButtonStyle.Primary)
-                    .setEmoji('🎉')
-            );
-        
-        const giveawayMsg = await channel.send({ embeds: [embed], components: [row] });
-        await giveawayMsg.react('🎉');
-        
-        giveaways.set(giveawayMsg.id, {
-            channelId: channel.id,
-            prize: prize,
-            winners: winners,
-            endsAt: endsAt,
-            ended: false
-        });
-        
-        addDebugLog('GIVEAWAY_STARTED', { channelId: channel.id, prize, winners, duration });
-        await interaction.reply({ content: `✅ Giveaway started! Ends in ${duration} minutes.`, ephemeral: true });
-        return;
-    }
-    
-    // ============ PING ============
+    // ============ PING COMMAND ============
     if (commandName === 'ping') {
         const sent = await interaction.reply({ content: '🏓 Pinging...', fetchReply: true });
         const roundtrip = sent.createdTimestamp - interaction.createdTimestamp;
@@ -540,10 +247,101 @@ client.on('interactionCreate', async (interaction) => {
                 { name: '👥 Users', value: `${client.users.cache.size}`, inline: true },
                 { name: '🏓 Ping', value: `${Math.round(client.ws.ping)}ms`, inline: true },
                 { name: '⏰ Uptime', value: `${Math.floor(client.uptime / 1000 / 60)} minutes`, inline: true },
-                { name: '📝 Commands', value: `${commands.length}`, inline: true },
-                { name: '💻 Developer', value: 'Fruxty Team', inline: true }
+                { name: '📝 Commands', value: `${commands.length}`, inline: true }
             );
         await interaction.reply({ embeds: [embed] });
+        return;
+    }
+    
+    // ============ RANK COMMAND ============
+    if (commandName === 'rank') {
+        const key = `${guild.id}-${interaction.user.id}`;
+        const userData = levels.get(key) || { xp: 0, level: 0, totalXP: 0 };
+        
+        // Get rank position
+        let allUsers = [];
+        for (const [k, data] of levels) {
+            if (k.startsWith(guild.id)) {
+                allUsers.push({ userId: k.split('-')[1], totalXP: data.totalXP });
+            }
+        }
+        allUsers.sort((a, b) => b.totalXP - a.totalXP);
+        const rank = allUsers.findIndex(u => u.userId === interaction.user.id) + 1;
+        
+        const embed = new EmbedBuilder()
+            .setColor(0xFF6B35)
+            .setTitle(`📊 ${interaction.user.username}'s Rank`)
+            .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+            .addFields(
+                { name: 'Level', value: `${userData.level}`, inline: true },
+                { name: 'Rank', value: `#${rank}`, inline: true },
+                { name: 'Total XP', value: `${userData.totalXP}`, inline: true },
+                { name: 'Progress', value: `${userData.xp}/100 XP`, inline: false }
+            );
+        
+        await interaction.reply({ embeds: [embed] });
+        return;
+    }
+    
+    // ============ LEADERBOARD ============
+    if (commandName === 'leaderboard') {
+        await interaction.deferReply();
+        
+        let allUsers = [];
+        for (const [k, data] of levels) {
+            if (k.startsWith(guild.id)) {
+                allUsers.push({ userId: k.split('-')[1], level: data.level, totalXP: data.totalXP });
+            }
+        }
+        allUsers.sort((a, b) => b.totalXP - a.totalXP);
+        const top10 = allUsers.slice(0, 10);
+        
+        let leaderboardText = '';
+        for (let i = 0; i < top10.length; i++) {
+            const user = await client.users.fetch(top10[i].userId).catch(() => null);
+            const username = user ? user.username : 'Unknown User';
+            leaderboardText += `${i+1}. **${username}** - Level ${top10[i].level} (${top10[i].totalXP} XP)\n`;
+        }
+        
+        const embed = new EmbedBuilder()
+            .setColor(0xFF6B35)
+            .setTitle(`🏆 Server Leaderboard`)
+            .setDescription(leaderboardText || 'No users ranked yet!')
+            .setFooter({ text: 'Chat more to climb the ranks!' });
+        
+        await interaction.editReply({ embeds: [embed] });
+        return;
+    }
+    
+    // ============ GIVEAWAY ============
+    if (commandName === 'giveaway') {
+        if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
+            return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
+        }
+        
+        const duration = options.getInteger('duration');
+        const prize = options.getString('prize');
+        const winners = options.getInteger('winners');
+        const endsAt = Date.now() + (duration * 60 * 1000);
+        
+        const embed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle(`🎁 GIVEAWAY 🎁`)
+            .setDescription(`**Prize:** ${prize}\n**Winners:** ${winners}\n**Ends:** <t:${Math.floor(endsAt / 1000)}:R>`)
+            .setFooter({ text: `React with 🎉 to enter!` });
+        
+        const giveawayMsg = await channel.send({ embeds: [embed] });
+        await giveawayMsg.react('🎉');
+        
+        giveaways.set(giveawayMsg.id, {
+            channelId: channel.id,
+            prize: prize,
+            winners: winners,
+            endsAt: endsAt,
+            ended: false
+        });
+        
+        await interaction.reply({ content: `✅ Giveaway started! Ends in ${duration} minutes.`, ephemeral: true });
         return;
     }
     
@@ -553,12 +351,7 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
         }
         
-        config.automod = { enabled: true, action: 'warn' };
-        config.antiNuke = true;
-        config.antiRaid = true;
-        config.leveling = { enabled: true, channel: null };
-        guildConfig.set(guild.id, config);
-        addDebugLog('SETUP_COMPLETE', { guildId: guild.id, userId: interaction.user.id });
+        guildConfig.set(guild.id, defaultConfig);
         
         const embed = new EmbedBuilder()
             .setColor(0x00FF00)
@@ -566,9 +359,8 @@ client.on('interactionCreate', async (interaction) => {
             .setDescription('Fruxty is now protecting your server!')
             .addFields(
                 { name: '🛡️ AutoMod', value: 'Enabled', inline: true },
-                { name: '🚨 Anti-Nuke', value: 'Enabled', inline: true },
-                { name: '📊 Anti-Raid', value: 'Enabled', inline: true },
-                { name: '📈 Leveling System', value: 'Enabled', inline: true }
+                { name: '📈 Leveling', value: 'Enabled', inline: true },
+                { name: '🚨 Anti-Nuke', value: 'Enabled', inline: true }
             );
         await interaction.reply({ embeds: [embed] });
         return;
@@ -585,11 +377,11 @@ client.on('interactionCreate', async (interaction) => {
         const category = await guild.channels.create({ name: '🎤 Temp Voice', type: ChannelType.GuildCategory });
         const creatorChannel = await guild.channels.create({ name: '➕-create-vc', type: ChannelType.GuildVoice, parent: category.id });
         
+        const config = guildConfig.get(guild.id) || defaultConfig;
         config.voiceSetup = true;
         config.voiceCategory = category.id;
         config.voiceCreator = creatorChannel.id;
         guildConfig.set(guild.id, config);
-        addDebugLog('VOICE_SETUP', { guildId: guild.id, categoryId: category.id, creatorId: creatorChannel.id });
         
         const embed = new EmbedBuilder()
             .setColor(0x00FF00)
@@ -612,10 +404,10 @@ client.on('interactionCreate', async (interaction) => {
         const verifyChannel = options.getChannel('channel');
         const verifyRole = options.getRole('role');
         
+        const config = guildConfig.get(guild.id) || defaultConfig;
         config.verifyChannel = verifyChannel.id;
         config.verifyRole = verifyRole.id;
         guildConfig.set(guild.id, config);
-        addDebugLog('VERIFY_SETUP', { guildId: guild.id, channelId: verifyChannel.id, roleId: verifyRole.id });
         
         const embed = new EmbedBuilder()
             .setColor(0x00FF00)
@@ -636,45 +428,18 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
     
-    // ============ AUTOMOD TOGGLE ============
+    // ============ AUTOMOD ============
     if (commandName === 'automod') {
         if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
         }
         
         const action = options.getString('action');
+        const config = guildConfig.get(guild.id) || defaultConfig;
         config.automod = { ...config.automod, enabled: action === 'on' };
         guildConfig.set(guild.id, config);
-        addDebugLog('AUTOMOD_TOGGLE', { guildId: guild.id, enabled: action === 'on' });
+        
         await interaction.reply({ content: `✅ AutoMod turned ${action.toUpperCase()}!`, ephemeral: true });
-        return;
-    }
-    
-    // ============ PURGE ============
-    if (commandName === 'purge') {
-        if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
-        }
-        
-        const amount = options.getInteger('amount');
-        const messages = await channel.messages.fetch({ limit: amount });
-        const deleted = await channel.bulkDelete(messages, true);
-        addDebugLog('PURGE', { guildId: guild.id, channelId: channel.id, amount: deleted.size });
-        await interaction.reply({ content: `✅ Deleted ${deleted.size} messages!`, ephemeral: true });
-        setTimeout(() => interaction.deleteReply().catch(() => {}), 3000);
-        return;
-    }
-    
-    // ============ LOCKDOWN ============
-    if (commandName === 'lockdown') {
-        if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
-        }
-        
-        const targetChannel = options.getChannel('channel') || channel;
-        await targetChannel.permissionOverwrites.edit(guild.id, { SendMessages: false });
-        addDebugLog('LOCKDOWN', { guildId: guild.id, channelId: targetChannel.id });
-        await interaction.reply({ content: `🔒 ${targetChannel} locked down!`, ephemeral: true });
         return;
     }
     
@@ -693,7 +458,6 @@ client.on('interactionCreate', async (interaction) => {
         }
         
         await targetMember.ban({ reason });
-        addDebugLog('BAN', { guildId: guild.id, userId: target.id, moderatorId: interaction.user.id, reason });
         const embed = new EmbedBuilder().setColor(0xFF0000).setTitle('🔨 User Banned').addFields({ name: 'User', value: target.tag }, { name: 'Reason', value: reason });
         await interaction.reply({ embeds: [embed] });
         return;
@@ -714,7 +478,6 @@ client.on('interactionCreate', async (interaction) => {
         }
         
         await targetMember.kick(reason);
-        addDebugLog('KICK', { guildId: guild.id, userId: target.id, moderatorId: interaction.user.id, reason });
         const embed = new EmbedBuilder().setColor(0xFFA500).setTitle('👢 User Kicked').addFields({ name: 'User', value: target.tag }, { name: 'Reason', value: reason });
         await interaction.reply({ embeds: [embed] });
         return;
@@ -735,7 +498,6 @@ client.on('interactionCreate', async (interaction) => {
         }
         
         await targetMember.timeout(minutes * 60 * 1000);
-        addDebugLog('TIMEOUT', { guildId: guild.id, userId: target.id, minutes });
         const embed = new EmbedBuilder().setColor(0xFFA500).setTitle('⏰ User Timed Out').addFields({ name: 'User', value: target.tag }, { name: 'Duration', value: `${minutes} minutes` });
         await interaction.reply({ embeds: [embed] });
         return;
@@ -754,22 +516,19 @@ client.on('interactionCreate', async (interaction) => {
         userWarnings.push({ reason, date: Date.now(), mod: interaction.user.tag });
         warnings.set(key, userWarnings);
         
-        addDebugLog('WARN', { guildId: guild.id, userId: target.id, reason, warningCount: userWarnings.length });
-        
         const embed = new EmbedBuilder().setColor(0xFFA500).setTitle('⚠️ User Warned').addFields({ name: 'User', value: target.tag }, { name: 'Reason', value: reason }, { name: 'Total Warnings', value: `${userWarnings.length}` });
         await interaction.reply({ embeds: [embed] });
         
         if (userWarnings.length >= 3) {
             const targetMember = await guild.members.fetch(target.id);
             await targetMember.timeout(30 * 60 * 1000, '3 warnings');
-            addDebugLog('AUTO_TIMEOUT', { userId: target.id, warnings: userWarnings.length });
             await interaction.followUp({ content: `⚠️ ${target.tag} was timed out for 30 minutes (3 warnings)` });
             warnings.delete(key);
         }
         return;
     }
     
-    // ============ WARNINGS VIEW ============
+    // ============ WARNINGS ============
     if (commandName === 'warnings') {
         const target = options.getUser('user') || interaction.user;
         const userWarnings = warnings.get(`${guild.id}-${target.id}`) || [];
@@ -783,8 +542,35 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
     
+    // ============ PURGE ============
+    if (commandName === 'purge') {
+        if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
+            return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
+        }
+        
+        const amount = options.getInteger('amount');
+        const messages = await channel.messages.fetch({ limit: amount });
+        const deleted = await channel.bulkDelete(messages, true);
+        await interaction.reply({ content: `✅ Deleted ${deleted.size} messages!`, ephemeral: true });
+        setTimeout(() => interaction.deleteReply().catch(() => {}), 3000);
+        return;
+    }
+    
+    // ============ LOCKDOWN ============
+    if (commandName === 'lockdown') {
+        if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
+            return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
+        }
+        
+        const targetChannel = options.getChannel('channel') || channel;
+        await targetChannel.permissionOverwrites.edit(guild.id, { SendMessages: false });
+        await interaction.reply({ content: `🔒 ${targetChannel} locked down!`, ephemeral: true });
+        return;
+    }
+    
     // ============ VERIFY ============
     if (commandName === 'verify') {
+        const config = guildConfig.get(guild.id) || defaultConfig;
         if (!config.verifyRole) {
             return interaction.reply({ content: '❌ Verification not setup! Ask an admin to run `/setup-verify`.', ephemeral: true });
         }
@@ -801,20 +587,19 @@ client.on('interactionCreate', async (interaction) => {
             const role = guild.roles.cache.get(config.verifyRole);
             if (role) await member.roles.add(role);
             await interaction.followUp({ content: '✅ Verified!', ephemeral: true });
-            addDebugLog('VERIFY_SUCCESS', { userId: interaction.user.id, guildId: guild.id });
             verifyCodes.delete(interaction.user.id);
         });
         
         collector.on('end', (collected) => {
             if (collected.size === 0) {
-                interaction.followUp({ content: '❌ Verification timed out. Please run `/verify` again.', ephemeral: true }).catch(() => {});
+                interaction.followUp({ content: '❌ Verification timed out.', ephemeral: true }).catch(() => {});
                 verifyCodes.delete(interaction.user.id);
             }
         });
         return;
     }
     
-    // ============ TEMP VOICE OWNER COMMANDS ============
+    // ============ VOICE CHANNEL COMMANDS ============
     if (commandName === 'vc') {
         let userChannel = null;
         let userChannelId = null;
@@ -836,7 +621,6 @@ client.on('interactionCreate', async (interaction) => {
         if (subcommand === 'rename') {
             const newName = options.getString('name');
             await userChannel.setName(newName.slice(0, 32));
-            addDebugLog('VC_RENAME', { userId: member.id, channelId: userChannelId, newName });
             await interaction.reply({ content: `✅ Channel renamed to **${newName}**`, ephemeral: true });
         }
         else if (subcommand === 'limit') {
@@ -869,11 +653,13 @@ client.on('interactionCreate', async (interaction) => {
             const oldData = tempChannels.get(userChannelId);
             tempChannels.set(userChannelId, { ...oldData, ownerId: member.id, ownerTag: member.user.tag });
             await userChannel.permissionOverwrites.edit(member.id, { Connect: true, ManageChannels: true });
-            addDebugLog('VC_CLAIM', { userId: member.id, channelId: userChannelId, previousOwner: oldData.ownerTag });
             await interaction.reply({ content: '✅ You are now the owner of this voice channel!', ephemeral: true });
         }
         return;
     }
+    
+    // Default response
+    await interaction.reply({ content: `✅ Command ${commandName} executed!`, ephemeral: true });
 });
 
 // ============ BUTTON HANDLER ============
@@ -896,30 +682,23 @@ client.on('interactionCreate', async (interaction) => {
         }
         
         await interaction.member.roles.add(role);
-        addDebugLog('BUTTON_VERIFY', { userId: interaction.user.id, guildId: interaction.guild.id });
         await interaction.reply({ content: '✅ You have been verified!', ephemeral: true });
-    }
-    
-    if (interaction.customId === 'giveaway_enter') {
-        await interaction.reply({ content: '🎉 You entered the giveaway! React with 🎉 to confirm.', ephemeral: true });
-        const message = interaction.message;
-        await message.react('🎉');
     }
 });
 
-// ============ MESSAGE CREATE (AutoMod) ============
+// ============ AUTO-MODERATION ============
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
     
     const config = guildConfig.get(message.guild.id) || defaultConfig;
     if (!config.automod?.enabled) return;
     
+    // Bad words filter
     const content = message.content.toLowerCase();
     const foundBadWord = badWords.find(word => content.includes(word));
     
     if (foundBadWord) {
         await message.delete();
-        addDebugLog('AUTOMOD_VIOLATION', { userId: message.author.id, guildId: message.guild.id, violation: foundBadWord });
         
         const userWarnings = warnings.get(`${message.guild.id}-${message.author.id}`) || [];
         userWarnings.push({ reason: `Bad word: ${foundBadWord}`, date: Date.now(), mod: 'AutoMod' });
@@ -936,7 +715,6 @@ client.on('messageCreate', async (message) => {
         
         if (userWarnings.length >= 3) {
             await message.member.timeout(30 * 60 * 1000, '3 warnings');
-            addDebugLog('AUTO_TIMEOUT', { userId: message.author.id, guildId: message.guild.id, warnings: userWarnings.length });
             warnings.delete(`${message.guild.id}-${message.author.id}`);
         }
     }
@@ -951,7 +729,6 @@ client.on('messageCreate', async (message) => {
     if (recent.length > 5) {
         await message.delete();
         await message.member.timeout(60 * 1000, 'Spamming');
-        addDebugLog('SPAM_TIMEOUT', { userId: message.author.id, guildId: message.guild.id, messages: recent.length });
         messageHistory.delete(`${message.guild.id}-${message.author.id}`);
     }
     
@@ -961,16 +738,58 @@ client.on('messageCreate', async (message) => {
     }, 5000);
 });
 
-// ============ VOICE STATE UPDATE ============
+// ============ LEVELING SYSTEM (XP GAIN) ============
+client.on('messageCreate', async (message) => {
+    if (message.author.bot || !message.guild) return;
+    
+    const config = guildConfig.get(message.guild.id) || defaultConfig;
+    if (!config.leveling?.enabled) return;
+    
+    const key = `${message.guild.id}-${message.author.id}`;
+    let userData = levels.get(key) || { xp: 0, level: 0, totalXP: 0 };
+    
+    const xpGain = Math.floor(Math.random() * 10) + 5;
+    userData.xp += xpGain;
+    userData.totalXP += xpGain;
+    
+    if (userData.xp >= 100) {
+        userData.level++;
+        userData.xp = 0;
+        message.channel.send(`🎉 ${message.author} reached Level ${userData.level}!`);
+        
+        // Give role rewards at certain levels
+        if (userData.level === 5) {
+            let role = message.guild.roles.cache.find(r => r.name === 'Level 5');
+            if (!role) {
+                role = await message.guild.roles.create({ name: 'Level 5', color: 0x00FF00 });
+            }
+            await message.member.roles.add(role);
+            await message.channel.send(`🎁 ${message.author} got the **Level 5** role!`);
+        } else if (userData.level === 10) {
+            let role = message.guild.roles.cache.find(r => r.name === 'Level 10');
+            if (!role) {
+                role = await message.guild.roles.create({ name: 'Level 10', color: 0x00AAFF });
+            }
+            await message.member.roles.add(role);
+            await message.channel.send(`🎁 ${message.author} got the **Level 10** role!`);
+        }
+    }
+    
+    levels.set(key, userData);
+});
+
+// ============ VOICE STATE UPDATE (Temp Channels) ============
 client.on('voiceStateUpdate', async (oldState, newState) => {
     if (!newState.guild) return;
     
     const config = guildConfig.get(newState.guild.id) || defaultConfig;
     if (!config.voiceSetup) return;
     
+    // Create temp channel when joining creator channel
     if (newState.channelId === config.voiceCreator && !oldState.channelId) {
         const member = newState.member;
         
+        // Check if user already has a temp channel
         let existingChannel = null;
         for (const [channelId, data] of tempChannels) {
             if (data.ownerId === member.id) {
@@ -998,20 +817,19 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         
         tempChannels.set(channel.id, { ownerId: member.id, ownerTag: member.user.tag, locked: false, hidden: false, createdAt: Date.now() });
         await member.voice.setChannel(channel);
-        addDebugLog('TEMP_CHANNEL_CREATED', { userId: member.id, channelId: channel.id, channelName });
         
         try {
             await member.send(`✅ Created your temp voice channel: **${channel.name}**\nUse \`/vc rename\`, \`/vc lock\`, \`/vc limit\`, \`/vc hide\`, \`/vc claim\` to manage it.`);
         } catch(e) {}
     }
     
+    // Delete empty temp channels
     if (oldState.channelId && tempChannels.has(oldState.channelId)) {
         const channel = oldState.guild.channels.cache.get(oldState.channelId);
         if (channel && channel.members.size === 0) {
             setTimeout(async () => {
                 const freshChannel = oldState.guild.channels.cache.get(oldState.channelId);
                 if (freshChannel && freshChannel.members.size === 0) {
-                    addDebugLog('TEMP_CHANNEL_DELETED', { channelId: oldState.channelId, channelName: freshChannel.name });
                     await freshChannel.delete();
                     tempChannels.delete(oldState.channelId);
                 }
@@ -1020,218 +838,86 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     }
 });
 
-// ============ HELPER FUNCTIONS ============
-async function getUserDebugInfo(userId) {
-    let serversFound = 0;
-    let totalWarnings = 0;
-    let tempChannelsCount = 0;
-    
-    for (const [guildId, guild] of client.guilds.cache) {
-        const member = await guild.members.fetch(userId).catch(() => null);
-        if (member) serversFound++;
-        
-        const userWarnings = warnings.get(`${guildId}-${userId}`) || [];
-        totalWarnings += userWarnings.length;
+// ============ GIVEAWAY CHECKER ============
+setInterval(async () => {
+    const now = Date.now();
+    for (const [messageId, giveaway] of giveaways) {
+        if (giveaway.endsAt <= now && !giveaway.ended) {
+            try {
+                const channel = await client.channels.fetch(giveaway.channelId);
+                const message = await channel.messages.fetch(messageId);
+                
+                // Get participants
+                const participants = [];
+                const reaction = message.reactions.cache.get('🎉');
+                if (reaction) {
+                    const users = await reaction.users.fetch();
+                    users.forEach(user => {
+                        if (!user.bot) participants.push(user);
+                    });
+                }
+                
+                const winners = [];
+                if (participants.length > 0) {
+                    for (let i = 0; i < Math.min(giveaway.winners, participants.length); i++) {
+                        const randomIndex = Math.floor(Math.random() * participants.length);
+                        winners.push(participants[randomIndex]);
+                        participants.splice(randomIndex, 1);
+                    }
+                }
+                
+                const winnerText = winners.length > 0 ? winners.map(w => `<@${w.id}>`).join(', ') : 'No valid participants';
+                
+                const embed = new EmbedBuilder()
+                    .setColor(0xFF0000)
+                    .setTitle(`🎁 GIVEAWAY ENDED 🎁`)
+                    .setDescription(`**Prize:** ${giveaway.prize}\n**Winners:** ${winnerText}`)
+                    .setTimestamp();
+                
+                await message.edit({ embeds: [embed] });
+                await channel.send(`🎉 Congratulations ${winnerText}! You won **${giveaway.prize}**!`);
+                
+                giveaway.ended = true;
+                giveaways.set(messageId, giveaway);
+            } catch (error) {
+                console.error('Giveaway ending error:', error);
+            }
+        }
     }
-    
-    for (const [channelId, data] of tempChannels) {
-        if (data.ownerId === userId) tempChannelsCount++;
-    }
-    
-    return { serversFound, totalWarnings, tempChannels: tempChannelsCount };
-}
+}, 10000);
 
-// ============ EXPRESS DASHBOARD API ============
+// ============ EXPRESS SERVER (for Render/UptimeRobot) ============
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
 
-// Health check
-app.get('/health', (req, res) => {
-    res.send('OK');
+app.get('/', (req, res) => {
+    res.send('Fruxty Bot is running! 🚀');
 });
 
-// Bot status
+app.get('/health', (req, res) => {
+    res.status(200).send('OK');
+});
+
 app.get('/api/status', (req, res) => {
     res.json({
         name: 'Fruxty Bot',
         status: 'online',
         guilds: client.guilds.cache.size,
-        users: client.users.cache.size,
         ping: client.ws.ping,
-        uptime: client.uptime,
-        commands: commands.length
+        commands: commands.length,
+        uptime: client.uptime
     });
-});
-
-// Guilds list
-app.get('/api/guilds', (req, res) => {
-    const guildList = client.guilds.cache.map(g => ({
-        id: g.id,
-        name: g.name,
-        icon: g.iconURL(),
-        memberCount: g.memberCount,
-        ownerId: g.ownerId
-    }));
-    res.json(guildList);
-});
-
-// Get guild settings
-app.get('/api/guilds/:guildId/settings', (req, res) => {
-    const config = guildConfig.get(req.params.guildId) || defaultConfig;
-    res.json(config);
-});
-
-// Save guild settings
-app.post('/api/guilds/:guildId/settings', (req, res) => {
-    const { guildId } = req.params;
-    const newSettings = req.body;
-    const current = guildConfig.get(guildId) || defaultConfig;
-    guildConfig.set(guildId, { ...current, ...newSettings });
-    addDebugLog('API_SETTINGS_SAVED', { guildId, settings: newSettings });
-    res.json({ success: true });
-});
-
-// Check if logged-in user is the owner
-app.get('/api/check-owner', async (req, res) => {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token) return res.json({ isOwner: false });
-    
-    try {
-        const userRes = await fetch('https://discord.com/api/users/@me', { 
-            headers: { Authorization: `Bearer ${token}` } 
-        });
-        const user = await userRes.json();
-        res.json({ isOwner: user.id === process.env.OWNER_ID, userId: user.id });
-    } catch (error) {
-        res.json({ isOwner: false, error: error.message });
-    }
-});
-
-// ============ OWNER-ONLY DEBUG API ============
-function isOwner(req, res, next) {
-    const authToken = req.headers.authorization || req.query.token;
-    if (authToken === process.env.OWNER_ID) {
-        return next();
-    }
-    return res.status(403).json({ error: 'Owner only', ownerId: process.env.OWNER_ID });
-}
-
-// Get full debug info for ANY user
-app.get('/api/owner/debug/user/:userId', isOwner, async (req, res) => {
-    const { userId } = req.params;
-    
-    try {
-        const result = {
-            userId: userId,
-            discord: null,
-            servers: [],
-            totalWarnings: 0,
-            totalTempChannels: 0
-        };
-        
-        // Get Discord user info
-        try {
-            const user = await client.users.fetch(userId);
-            result.discord = {
-                id: user.id,
-                tag: user.tag,
-                username: user.username,
-                avatar: user.displayAvatarURL({ dynamic: true, size: 256 }),
-                createdAt: user.createdTimestamp,
-                bot: user.bot
-            };
-        } catch (e) {
-            result.discord = { error: 'User not found' };
-        }
-        
-        // Scan all guilds
-        for (const [guildId, guild] of client.guilds.cache) {
-            try {
-                const member = await guild.members.fetch(userId).catch(() => null);
-                
-                const guildInfo = {
-                    guildId: guild.id,
-                    guildName: guild.name,
-                    isInGuild: !!member,
-                    isOwner: guild.ownerId === userId,
-                    nickname: member?.nickname,
-                    isTimedOut: member?.isCommunicationDisabled(),
-                    warnings: warnings.get(`${guildId}-${userId}`) || [],
-                    hasTempChannel: false,
-                    canKick: member?.kickable || false,
-                    canBan: member?.bannable || false
-                };
-                
-                result.totalWarnings += guildInfo.warnings.length;
-                result.servers.push(guildInfo);
-            } catch(e) {}
-        }
-        
-        // Check temp channels
-        for (const [channelId, data] of tempChannels) {
-            if (data.ownerId === userId) {
-                result.totalTempChannels++;
-            }
-        }
-        
-        res.json(result);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Perform action on a user across servers
-app.post('/api/owner/action/:guildId/:action', isOwner, async (req, res) => {
-    const { guildId, action } = req.params;
-    const { userId, reason } = req.body;
-    
-    const guild = client.guilds.cache.get(guildId);
-    if (!guild) return res.status(404).json({ error: 'Guild not found' });
-    
-    const member = await guild.members.fetch(userId).catch(() => null);
-    if (!member) return res.status(404).json({ error: 'User not in guild' });
-    
-    try {
-        switch (action) {
-            case 'kick':
-                await member.kick(reason);
-                res.json({ success: true, action: 'kick', message: `Kicked ${member.user.tag}` });
-                break;
-            case 'ban':
-                await member.ban({ reason });
-                res.json({ success: true, action: 'ban', message: `Banned ${member.user.tag}` });
-                break;
-            case 'timeout':
-                await member.timeout(5 * 60 * 1000, reason);
-                res.json({ success: true, action: 'timeout', message: `Timed out ${member.user.tag} for 5 minutes` });
-                break;
-            case 'warn':
-                const key = `${guildId}-${userId}`;
-                const userWarnings = warnings.get(key) || [];
-                userWarnings.push({ reason, date: Date.now(), mod: 'Owner' });
-                warnings.set(key, userWarnings);
-                res.json({ success: true, action: 'warn', message: `Warned ${member.user.tag} (${userWarnings.length}/3)`, warningCount: userWarnings.length });
-                break;
-            default:
-                res.status(400).json({ error: 'Invalid action' });
-        }
-        addDebugLog('OWNER_ACTION', { guildId, action, userId, reason });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`📡 Fruxty API running on port ${PORT}`);
-    console.log(`🌐 Dashboard: http://localhost:${PORT}/dashboard.html`);
-    console.log(`🔧 Owner ID: ${process.env.OWNER_ID}`);
+    console.log(`📡 API server running on port ${PORT}`);
+    console.log(`🌐 Health check: http://localhost:${PORT}/health`);
 });
 
 // ============ LOGIN ============
 client.login(process.env.DISCORD_TOKEN).catch(err => {
-    console.error('Login failed:', err.message);
+    console.error('❌ Login failed:', err.message);
     process.exit(1);
 });
