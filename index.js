@@ -23,6 +23,8 @@ const warnings = new Map();
 const messageHistory = new Map();
 const debugLogs = [];
 const verifyCodes = new Map();
+const levels = new Map();
+const giveaways = new Map();
 
 // ============ DEFAULT CONFIG ============
 const defaultConfig = {
@@ -34,7 +36,8 @@ const defaultConfig = {
     verifyRole: null,
     voiceCategory: null,
     voiceCreator: null,
-    voiceSetup: false
+    voiceSetup: false,
+    leveling: { enabled: true, channel: null }
 };
 
 // ============ BAD WORDS ============
@@ -63,6 +66,13 @@ const commands = [
     { name: 'avatar', description: 'Get user avatar', options: [{ name: 'user', type: 6, description: 'User', required: false }] },
     { name: 'botinfo', description: 'Get bot statistics' },
     { name: 'help', description: 'Show all commands' },
+    { name: 'rank', description: 'Check your level and XP' },
+    { name: 'leaderboard', description: 'View top 10 users by level' },
+    { name: 'giveaway', description: 'Start a giveaway (Admin only)', options: [
+        { name: 'duration', type: 4, description: 'Duration in minutes', required: true },
+        { name: 'prize', type: 3, description: 'What to win', required: true },
+        { name: 'winners', type: 4, description: 'Number of winners', required: true }
+    ]},
     { name: 'setup', description: 'Setup Fruxty bot (Admin only)' },
     { name: 'setup-voice', description: 'Setup temp voice channels (Admin only)' },
     { name: 'setup-verify', description: 'Setup verification system (Admin only)', options: [{ name: 'channel', type: 7, required: true }, { name: 'role', type: 8, required: true }] },
@@ -104,6 +114,7 @@ client.once('ready', async () => {
     } catch(e) { console.error(e); }
     
     updateStatus();
+    startGiveawayChecker();
 });
 
 async function updateStatus() {
@@ -116,7 +127,131 @@ async function updateStatus() {
 
 setInterval(() => updateStatus(), 300000);
 
-// ============ HELP COMMAND HANDLER ============
+// ============ LEVELING SYSTEM ============
+client.on('messageCreate', async (message) => {
+    if (message.author.bot || !message.guild) return;
+    
+    const config = guildConfig.get(message.guild.id) || defaultConfig;
+    if (!config.leveling?.enabled) return;
+    
+    // Random XP between 5-15
+    const xpGain = Math.floor(Math.random() * 10) + 5;
+    const userId = message.author.id;
+    const guildId = message.guild.id;
+    const key = `${guildId}-${userId}`;
+    
+    let userData = levels.get(key);
+    if (!userData) {
+        userData = { xp: 0, level: 0, totalXP: 0 };
+    }
+    
+    userData.xp += xpGain;
+    userData.totalXP += xpGain;
+    
+    const xpNeeded = (userData.level + 1) * 100;
+    
+    if (userData.xp >= xpNeeded) {
+        userData.level++;
+        userData.xp = userData.xp - xpNeeded;
+        
+        // Level up message
+        const levelUpEmbed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle(`🎉 LEVEL UP! 🎉`)
+            .setDescription(`${message.author} reached **Level ${userData.level}**!`)
+            .setFooter({ text: `Total XP: ${userData.totalXP}` });
+        
+        const levelChannel = config.leveling.channel ? message.guild.channels.cache.get(config.leveling.channel) : message.channel;
+        if (levelChannel) {
+            await levelChannel.send({ embeds: [levelUpEmbed] });
+        }
+        
+        addDebugLog('LEVEL_UP', { userId, guildId, newLevel: userData.level });
+        
+        // Give role rewards at certain levels
+        if (userData.level === 5) {
+            let role = message.guild.roles.cache.find(r => r.name === 'Level 5');
+            if (!role) {
+                role = await message.guild.roles.create({ name: 'Level 5', color: 0x00FF00 });
+            }
+            await message.member.roles.add(role);
+            await message.channel.send(`🎁 ${message.author} got the **Level 5** role!`);
+        } else if (userData.level === 10) {
+            let role = message.guild.roles.cache.find(r => r.name === 'Level 10');
+            if (!role) {
+                role = await message.guild.roles.create({ name: 'Level 10', color: 0x00AAFF });
+            }
+            await message.member.roles.add(role);
+            await message.channel.send(`🎁 ${message.author} got the **Level 10** role!`);
+        } else if (userData.level === 25) {
+            let role = message.guild.roles.cache.find(r => r.name === 'Level 25');
+            if (!role) {
+                role = await message.guild.roles.create({ name: 'Level 25', color: 0xFFAA00 });
+            }
+            await message.member.roles.add(role);
+            await message.channel.send(`🎁 ${message.author} got the **Level 25** role!`);
+        }
+    }
+    
+    levels.set(key, userData);
+});
+
+// ============ GIVEAWAY SYSTEM ============
+async function startGiveawayChecker() {
+    setInterval(async () => {
+        const now = Date.now();
+        for (const [messageId, giveaway] of giveaways) {
+            if (giveaway.endsAt <= now && !giveaway.ended) {
+                await endGiveaway(messageId, giveaway);
+            }
+        }
+    }, 10000);
+}
+
+async function endGiveaway(messageId, giveaway) {
+    try {
+        const channel = await client.channels.fetch(giveaway.channelId);
+        const message = await channel.messages.fetch(messageId);
+        
+        // Get participants
+        const participants = [];
+        const reactions = message.reactions.cache.get('🎉');
+        if (reactions) {
+            const users = await reactions.users.fetch();
+            users.forEach(user => {
+                if (!user.bot) participants.push(user);
+            });
+        }
+        
+        const winners = [];
+        if (participants.length > 0) {
+            for (let i = 0; i < Math.min(giveaway.winners, participants.length); i++) {
+                const randomIndex = Math.floor(Math.random() * participants.length);
+                winners.push(participants[randomIndex]);
+                participants.splice(randomIndex, 1);
+            }
+        }
+        
+        const winnerText = winners.length > 0 ? winners.map(w => `<@${w.id}>`).join(', ') : 'No valid participants';
+        
+        const embed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle(`🎁 GIVEAWAY ENDED 🎁`)
+            .setDescription(`**Prize:** ${giveaway.prize}\n**Winners:** ${winnerText}`)
+            .setTimestamp();
+        
+        await message.edit({ embeds: [embed], components: [] });
+        await channel.send({ content: `🎉 Congratulations ${winnerText}! You won **${giveaway.prize}**!` });
+        
+        giveaway.ended = true;
+        giveaways.set(messageId, giveaway);
+        addDebugLog('GIVEAWAY_ENDED', { messageId, winners: winners.length });
+    } catch (error) {
+        console.error('Giveaway ending error:', error);
+    }
+}
+
+// ============ HELP COMMAND ============
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
     
@@ -129,6 +264,8 @@ client.on('interactionCreate', async (interaction) => {
             .setDescription('Here are all my commands!')
             .addFields(
                 { name: '📊 Information', value: '`/ping`, `/serverinfo`, `/userinfo`, `/avatar`, `/botinfo`', inline: false },
+                { name: '📈 Leveling', value: '`/rank`, `/leaderboard`', inline: false },
+                { name: '🎁 Giveaways', value: '`/giveaway` (Admin only)', inline: false },
                 { name: '🛡️ Moderation', value: '`/ban`, `/kick`, `/timeout`, `/warn`, `/warnings`, `/purge`, `/lockdown`', inline: false },
                 { name: '⚙️ Setup', value: '`/setup`, `/setup-voice`, `/setup-verify`, `/automod`', inline: false },
                 { name: '🎤 Voice', value: '`/vc rename`, `/vc limit`, `/vc lock`, `/vc unlock`, `/vc hide`, `/vc reveal`, `/vc claim`', inline: false },
@@ -216,6 +353,113 @@ client.on('interactionCreate', async (interaction) => {
         return interaction.reply({ content: '❌ This command can only be used in a server!', ephemeral: true });
     }
     
+    // ============ RANK COMMAND ============
+    if (commandName === 'rank') {
+        await interaction.deferReply();
+        
+        const key = `${guild.id}-${interaction.user.id}`;
+        const userData = levels.get(key) || { xp: 0, level: 0, totalXP: 0 };
+        const xpNeeded = (userData.level + 1) * 100;
+        const xpProgress = Math.floor((userData.xp / xpNeeded) * 100);
+        
+        // Get rank position
+        let allUsers = [];
+        for (const [k, data] of levels) {
+            if (k.startsWith(guild.id)) {
+                allUsers.push({ userId: k.split('-')[1], level: data.level, totalXP: data.totalXP });
+            }
+        }
+        allUsers.sort((a, b) => b.totalXP - a.totalXP);
+        const rank = allUsers.findIndex(u => u.userId === interaction.user.id) + 1;
+        
+        const embed = new EmbedBuilder()
+            .setColor(0xFF6B35)
+            .setTitle(`📊 ${interaction.user.username}'s Rank`)
+            .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+            .addFields(
+                { name: 'Level', value: `${userData.level}`, inline: true },
+                { name: 'Rank', value: `#${rank}`, inline: true },
+                { name: 'Total XP', value: `${userData.totalXP}`, inline: true },
+                { name: 'Progress', value: `${userData.xp}/${xpNeeded} XP (${xpProgress}%)`, inline: false }
+            )
+            .setFooter({ text: 'Keep chatting to level up!' });
+        
+        await interaction.editReply({ embeds: [embed] });
+        return;
+    }
+    
+    // ============ LEADERBOARD COMMAND ============
+    if (commandName === 'leaderboard') {
+        await interaction.deferReply();
+        
+        let allUsers = [];
+        for (const [k, data] of levels) {
+            if (k.startsWith(guild.id)) {
+                allUsers.push({ userId: k.split('-')[1], level: data.level, totalXP: data.totalXP });
+            }
+        }
+        allUsers.sort((a, b) => b.totalXP - a.totalXP);
+        const top10 = allUsers.slice(0, 10);
+        
+        let leaderboardText = '';
+        for (let i = 0; i < top10.length; i++) {
+            const user = await client.users.fetch(top10[i].userId).catch(() => null);
+            const username = user ? user.username : 'Unknown User';
+            leaderboardText += `${i+1}. **${username}** - Level ${top10[i].level} (${top10[i].totalXP} XP)\n`;
+        }
+        
+        const embed = new EmbedBuilder()
+            .setColor(0xFF6B35)
+            .setTitle(`🏆 Server Leaderboard`)
+            .setDescription(leaderboardText || 'No users ranked yet!')
+            .setFooter({ text: 'Chat more to climb the ranks!' });
+        
+        await interaction.editReply({ embeds: [embed] });
+        return;
+    }
+    
+    // ============ GIVEAWAY COMMAND ============
+    if (commandName === 'giveaway') {
+        if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
+            return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
+        }
+        
+        const duration = options.getInteger('duration');
+        const prize = options.getString('prize');
+        const winners = options.getInteger('winners');
+        const endsAt = Date.now() + (duration * 60 * 1000);
+        
+        const embed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle(`🎁 GIVEAWAY 🎁`)
+            .setDescription(`**Prize:** ${prize}\n**Winners:** ${winners}\n**Ends:** <t:${Math.floor(endsAt / 1000)}:R>`)
+            .setFooter({ text: `React with 🎉 to enter!` });
+        
+        const row = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('giveaway_enter')
+                    .setLabel('Enter Giveaway')
+                    .setStyle(ButtonStyle.Primary)
+                    .setEmoji('🎉')
+            );
+        
+        const giveawayMsg = await channel.send({ embeds: [embed], components: [row] });
+        await giveawayMsg.react('🎉');
+        
+        giveaways.set(giveawayMsg.id, {
+            channelId: channel.id,
+            prize: prize,
+            winners: winners,
+            endsAt: endsAt,
+            ended: false
+        });
+        
+        addDebugLog('GIVEAWAY_STARTED', { channelId: channel.id, prize, winners, duration });
+        await interaction.reply({ content: `✅ Giveaway started! Ends in ${duration} minutes.`, ephemeral: true });
+        return;
+    }
+    
     // ============ PING ============
     if (commandName === 'ping') {
         const sent = await interaction.reply({ content: '🏓 Pinging...', fetchReply: true });
@@ -235,6 +479,7 @@ client.on('interactionCreate', async (interaction) => {
     
     // ============ SERVER INFO ============
     if (commandName === 'serverinfo') {
+        await interaction.deferReply();
         const fetchOwner = await guild.fetchOwner();
         const embed = new EmbedBuilder()
             .setColor(0xFF6B35)
@@ -247,12 +492,13 @@ client.on('interactionCreate', async (interaction) => {
                 { name: '📅 Created', value: `<t:${Math.floor(guild.createdTimestamp / 1000)}:R>`, inline: true },
                 { name: '🔧 Boosts', value: `${guild.premiumSubscriptionCount || 0}`, inline: true }
             );
-        await interaction.reply({ embeds: [embed] });
+        await interaction.editReply({ embeds: [embed] });
         return;
     }
     
     // ============ USER INFO ============
     if (commandName === 'userinfo') {
+        await interaction.deferReply();
         const target = options.getUser('user') || interaction.user;
         const targetMember = await guild.members.fetch(target.id).catch(() => null);
         const embed = new EmbedBuilder()
@@ -265,7 +511,7 @@ client.on('interactionCreate', async (interaction) => {
                 { name: '📅 Joined Discord', value: `<t:${Math.floor(target.createdTimestamp / 1000)}:R>`, inline: true },
                 { name: '🤖 Bot', value: target.bot ? 'Yes' : 'No', inline: true }
             );
-        await interaction.reply({ embeds: [embed] });
+        await interaction.editReply({ embeds: [embed] });
         return;
     }
     
@@ -307,6 +553,7 @@ client.on('interactionCreate', async (interaction) => {
         config.automod = { enabled: true, action: 'warn' };
         config.antiNuke = true;
         config.antiRaid = true;
+        config.leveling = { enabled: true, channel: null };
         guildConfig.set(guild.id, config);
         addDebugLog('SETUP_COMPLETE', { guildId: guild.id, userId: interaction.user.id });
         
@@ -317,7 +564,8 @@ client.on('interactionCreate', async (interaction) => {
             .addFields(
                 { name: '🛡️ AutoMod', value: 'Enabled', inline: true },
                 { name: '🚨 Anti-Nuke', value: 'Enabled', inline: true },
-                { name: '📊 Anti-Raid', value: 'Enabled', inline: true }
+                { name: '📊 Anti-Raid', value: 'Enabled', inline: true },
+                { name: '📈 Leveling System', value: 'Enabled', inline: true }
             );
         await interaction.reply({ embeds: [embed] });
         return;
@@ -647,6 +895,12 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.member.roles.add(role);
         addDebugLog('BUTTON_VERIFY', { userId: interaction.user.id, guildId: interaction.guild.id });
         await interaction.reply({ content: '✅ You have been verified!', ephemeral: true });
+    }
+    
+    if (interaction.customId === 'giveaway_enter') {
+        await interaction.reply({ content: '🎉 You entered the giveaway! React with 🎉 to confirm.', ephemeral: true });
+        const message = interaction.message;
+        await message.react('🎉');
     }
 });
 
