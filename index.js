@@ -935,41 +935,50 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Add this to your existing index.js (before app.listen)
+// ============ DISCORD OAUTH ROUTES ============
+// Redirect user to Discord
+app.get('/auth/discord', (req, res) => {
+    const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${process.env.CLIENT_ID}&redirect_uri=${encodeURIComponent('https://fruxty.onrender.com/auth/callback')}&response_type=code&scope=identify%20guilds`;
+    res.redirect(discordAuthUrl);
+});
 
-// ============ DISCORD OAUTH BACKEND ============
-const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET; // Add to .env!
+// Callback from Discord
+app.get('/auth/callback', async (req, res) => {
+    const { code } = req.query;
+    if (!code) return res.redirect('/');
 
-// Exchange code for token
-app.post('/api/auth/token', async (req, res) => {
-    const { code } = req.body;
-    
+    // Exchange code for token
     const params = new URLSearchParams();
     params.append('client_id', process.env.CLIENT_ID);
-    params.append('client_secret', CLIENT_SECRET);
+    params.append('client_secret', process.env.DISCORD_CLIENT_SECRET);
     params.append('grant_type', 'authorization_code');
     params.append('code', code);
-    params.append('redirect_uri', 'https://fruxty-dashboard.vercel.app/dashboard');
-    
-    const response = await fetch('https://discord.com/api/oauth2/token', {
+    params.append('redirect_uri', 'https://fruxty.onrender.com/auth/callback');
+
+    const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
         method: 'POST',
         body: params,
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     });
-    
-    const data = await response.json();
-    res.json(data);
+    const tokenData = await tokenRes.json();
+
+    if (!tokenData.access_token) {
+        return res.redirect('/');
+    }
+
+    // Redirect to Vercel dashboard with token in query string
+    res.redirect(`https://fruxty-dashboard.vercel.app/dashboard?token=${tokenData.access_token}`);
 });
 
-// Verify token and get user
-app.get('/api/auth/verify', async (req, res) => {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token) return res.status(401).json({ error: 'No token' });
-    
+// Endpoint to verify token (dashboard calls this)
+app.get('/api/verify', async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'No token' });
+
+    const token = authHeader.replace('Bearer ', '');
     const response = await fetch('https://discord.com/api/users/@me', {
         headers: { Authorization: `Bearer ${token}` }
     });
-    
     if (!response.ok) return res.status(401).json({ error: 'Invalid token' });
     const user = await response.json();
     res.json(user);
