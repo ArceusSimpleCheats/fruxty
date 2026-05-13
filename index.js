@@ -966,7 +966,7 @@ app.get('/auth/callback', async (req, res) => {
         return res.redirect('/');
     }
 
-    // Redirect to Vercel dashboard with token in query string
+    // ✅ IMPORTANT: Redirect to VERCEL dashboard with token
     res.redirect(`https://fruxty-dashboard.vercel.app/dashboard?token=${tokenData.access_token}`);
 });
 
