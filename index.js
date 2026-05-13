@@ -938,14 +938,17 @@ app.use(express.json());
 // ============ DISCORD OAUTH ROUTES ============
 // Redirect user to Discord
 app.get('/auth/discord', (req, res) => {
-    const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${process.env.CLIENT_ID}&redirect_uri=${encodeURIComponent('https://fruxty.onrender.com/auth/callback')}&response_type=code&scope=identify%20guilds`;
+    const redirectUri = encodeURIComponent('https://fruxty.onrender.com/auth/callback');
+    const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${process.env.CLIENT_ID}&redirect_uri=${redirectUri}&response_type=code&scope=identify%20guilds`;
     res.redirect(discordAuthUrl);
 });
 
-// Callback from Discord
 app.get('/auth/callback', async (req, res) => {
     const { code } = req.query;
-    if (!code) return res.redirect('/');
+    
+    if (!code) {
+        return res.redirect('https://fruxty-dashboard.vercel.app/?error=no_code');
+    }
 
     // Exchange code for token
     const params = new URLSearchParams();
@@ -960,14 +963,17 @@ app.get('/auth/callback', async (req, res) => {
         body: params,
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     });
+    
     const tokenData = await tokenRes.json();
 
     if (!tokenData.access_token) {
-        return res.redirect('/');
+        return res.redirect('https://fruxty-dashboard.vercel.app/?error=token_failed');
     }
 
-    // ✅ IMPORTANT: Redirect to VERCEL dashboard with token
-    res.redirect(`https://fruxty-dashboard.vercel.app/dashboard?token=${tokenData.access_token}`);
+    // ✅ CRITICAL - Redirect to VERCEL, NOT to Render
+    const redirectUrl = `https://fruxty-dashboard.vercel.app/dashboard?token=${tokenData.access_token}`;
+    console.log('Redirecting to:', redirectUrl);
+    res.redirect(redirectUrl);
 });
 
 // Endpoint to verify token (dashboard calls this)
